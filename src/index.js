@@ -1,110 +1,85 @@
-import { GalleryAPI } from './js/api-pixabay.js';
-import { LoadMoreBtn } from './js/loadmoreBtn.js';
-import { Notify } from 'notiflix';
-import SimpleLightbox from 'simplelightbox';
-import 'simplelightbox/dist/simple-lightbox.min.css';
-import './css/styles.css';
+class Calculator {
+  constructor(screenElement) {
+    this.screenElement = screenElement;
+    this.reset();
+  }
 
-const API_KEY = '32196578-0357af1d01bd33a041e645ec2';
+  reset() {
+    this.currentValue = '';
+    this.previousValue = '';
+    this.operator = null;
+    this.updateScreen();
+  }
 
-const refs = {
-  searchForm: document.querySelector('#search-form'),
-  imageContainer: document.querySelector('.gallery'),
-  searchBtn: document.querySelector('.search-button'),
-};
+  appendNumber(number) {
+    if (number === '.' && this.currentValue.includes('.')) return;
+    this.currentValue += number.toString();
+    this.updateScreen();
+  }
 
-refs.searchForm.addEventListener('submit', onFormSubmit);
-const galleryAPI = new GalleryAPI();
-const loadMoreBtn = new LoadMoreBtn('load-more', onLoadMoreBtn);
-const simplelightbox = new SimpleLightbox('.gallery a', {
-  captionsData: 'alt',
-  captionDelay: 250,
+  chooseOperator(operator) {
+    if (this.currentValue === '') return;
+    if (this.previousValue !== '') {
+      this.calculate();
+    }
+    this.operator = operator;
+    this.previousValue = this.currentValue;
+    this.currentValue = '';
+  }
+
+  calculate() {
+    let result;
+    const prev = parseFloat(this.previousValue);
+    const current = parseFloat(this.currentValue);
+    if (isNaN(prev) || isNaN(current)) return;
+    switch (this.operator) {
+      case '+':
+        result = prev + current;
+        break;
+      case '-':
+        result = prev - current;
+        break;
+      case '*':
+        result = prev * current;
+        break;
+      case '/':
+        result = prev / current;
+        break;
+      default:
+        return;
+    }
+    this.currentValue = result;
+    this.operator = null;
+    this.previousValue = '';
+    this.updateScreen();
+  }
+
+  updateScreen() {
+    this.screenElement.value = this.currentValue;
+  }
+}
+
+const calculator = new Calculator(document.querySelector('#screen'));
+
+document.querySelector('.calculator-keys').addEventListener('click', event => {
+  const target = event.target;
+  const value = target.value;
+  if (!target.matches('button')) return;
+
+  switch (target.classList[0]) {
+    case 'operator':
+      calculator.chooseOperator(value);
+      break;
+    case 'decimal':
+      calculator.appendNumber(value);
+      break;
+    case 'all-clear':
+      calculator.reset();
+      break;
+    case 'equal-sign':
+      calculator.calculate();
+      break;
+    default:
+      calculator.appendNumber(value);
+  }
 });
-
-async function onFormSubmit(evt) {
-  evt.preventDefault();
-  refs.imageContainer.innerHTML = '';
-  galleryAPI.query = evt.currentTarget.elements.searchQuery.value.trim();
-  if (galleryAPI.query === '') {
-    Notify.warning('Enter something');
-    return;
-  }
-  refs.searchForm.reset();
-  try {
-    const { hits, totalHits } = await galleryAPI.axiosGet();
-    if (totalHits === 0) {
-      Notify.warning(
-        'Sorry, there are no images matching your search query. Please try again.'
-      );
-      refs.imageContainer.innerHTML = '';
-      loadMoreBtn.hide();
-      return;
-    }
-    Notify.success(`Hooray! We found ${totalHits} images.`);
-    onMarkupPhotos(hits);
-    simplelightbox.refresh();
-    loadMoreBtn.show();
-  } catch (error) {
-    Notify.failure('Error');
-  }
-}
-
-function onMarkupPhotos(hits) {
-  const markupPhotos = hits
-    .map(
-      ({
-        webformatURL,
-        largeImageURL,
-        tags,
-        likes,
-        views,
-        comments,
-        downloads,
-      }) => {
-        return ` 
-        <div class="photo-card">
-        <a href="${largeImageURL}" class="gallery-link">
-                <img src="${webformatURL}" alt="${tags}" loading="lazy" />
-                </a>
-              <div class="info">
-                <p class="info-item">
-                  <b>Likes: </b>${likes}
-                </p>
-                <p class="info-item">
-                  <b>Views: </b>${views}
-                </p>
-                <p class="info-item">
-                  <b>Comments: </b>${comments}
-                </p>
-                <p class="info-item">
-                  <b>Downloads: </b>${downloads}
-                </p>
-              </div>
-      </div>
-      `;
-      }
-    )
-    .join('');
-
-  refs.imageContainer.insertAdjacentHTML('beforeend', markupPhotos);
-}
-
-async function onLoadMoreBtn() {
-  loadMoreBtn.loading();
-  try {
-    const { hits, totalHits } = await galleryAPI.axiosGet();
-    onMarkupPhotos(hits);
-
-    loadMoreBtn.endLoading();
-    if (hits.length < 40) {
-      loadMoreBtn.hide();
-      simplelightbox.refresh();
-      Notify.warning(
-        "We're sorry, but you've reached the end of search results."
-      );
-      return;
-    }
-  } catch (error) {
-    Notify.failure('Error');
-  }
-}
